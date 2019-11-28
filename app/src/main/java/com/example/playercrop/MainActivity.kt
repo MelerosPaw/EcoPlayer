@@ -1,11 +1,8 @@
 package com.example.playercrop
 
-import android.media.MediaPlayer
-import android.net.Uri
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import androidx.appcompat.app.AppCompatActivity
 import kotlinx.android.synthetic.main.activity_main.*
-import kotlin.math.max
 
 class MainActivity : AppCompatActivity() {
 

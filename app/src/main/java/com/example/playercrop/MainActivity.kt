@@ -1,8 +1,11 @@
 package com.example.playercrop
 
+import android.media.MediaPlayer
+import android.net.Uri
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import kotlinx.android.synthetic.main.activity_main.*
+import kotlin.math.max
 
 class MainActivity : AppCompatActivity() {
 
@@ -35,4 +38,50 @@ class MainActivity : AppCompatActivity() {
             .build()
         player.drawVideo(imageVideo, viewConfig)
     }
+
+//    private fun oldWay() {
+//        videoPlayImg.setImageResource(R.drawable.video_play)
+//        videoView.setVideoURI(Uri.parse(url))
+//        videoView.setOnErrorListener { _, _, _ ->
+//            setErrorVideoState()
+//            true
+//        }
+//        videoView.setOnPreparedListener { mediaPlayer ->
+//            ViewUtils.setVisible(true, videoContainer, videoView)
+//            showPlayView(true)
+//            try {
+//                mediaPlayer.isLooping = getBoolean(R.bool.loop_video_product_detail)
+//                if (InditexApplication.get().isWifiConnected) {
+//                    videoView.start()
+//                    videoView.pause()
+//                }
+//            } catch (e: Exception) {
+//                setErrorVideoState()
+//            }
+//            resizeVideoView(mediaPlayer)
+//        }
+//        videoView.setOnCompletionListener {
+//            showPlayView(true)
+//        }
+//    }
+//
+//    private fun resizeVideoView(mediaPlayer: MediaPlayer) {
+//        val videoWidth: Int = mediaPlayer.videoWidth
+//        val videoHeight: Int = mediaPlayer.videoHeight
+//
+//        val videoViewWidth = videoView.width
+//        val videoViewHeight = videoView.height
+//
+//        val xScale = videoViewWidth.toFloat() / videoWidth
+//        val yScale = videoViewHeight.toFloat() / videoHeight
+//        val scale = max(xScale, yScale)
+//
+//        val scaledWidth = scale * videoWidth
+//        val scaledHeight = scale * videoHeight
+//
+//        val layoutParams = videoView.layoutParams
+//        layoutParams.width = scaledWidth.toInt()
+//        layoutParams.height = scaledHeight.toInt()
+//        videoView.layoutParams = layoutParams
+//    }
 }

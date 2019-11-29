@@ -1,7 +1,7 @@
 package com.example.playercrop
 
 class VideoWBO(val path: String?,
-               val videoConfig: VideoConfigBO,
+               val videoConfig: VideoConfigBO?,
                val height: Int? = null,
                val width: Int? = null,
                val onVideoClickedListener: OnVideoClickedListener? = null) {

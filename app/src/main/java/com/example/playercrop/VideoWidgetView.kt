@@ -29,6 +29,7 @@ import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.Player
 import com.google.android.exoplayer2.SimpleExoPlayer
 import com.google.android.exoplayer2.source.MediaSource
+import com.google.android.exoplayer2.ui.AspectRatioFrameLayout
 import com.google.android.exoplayer2.ui.PlayerView
 import kotlin.math.roundToInt
 
@@ -53,9 +54,9 @@ class VideoWidgetView @JvmOverloads constructor(
   @BindView(R.id.video__container__parent)
   lateinit var container: ConstraintLayout
   @BindView(R.id.video__view__texture_video)
-  lateinit var textureV: TextureView
-  //  @BindView(R.id.video__view__player)
-//  lateinit var playerView: PlayerView
+  lateinit var textureView: TextureView
+  @BindView(R.id.video__view__player)
+  lateinit var playerView: PlayerView
   @BindView(R.id.video__img__image_widget)
   lateinit var imageView: ImageView
   @BindView(R.id.video__container__img__play)
@@ -66,13 +67,12 @@ class VideoWidgetView @JvmOverloads constructor(
   //  private lateinit var viewModel: SlideViewModel
 //  private lateinit var categoryViewModel: CategoryViewModel
   private var widgetPosition: Int = 0
-  private var path: String? = ""
   private lateinit var videoWidget: ImageVideoWidgetBO
   private lateinit var playerConfig: PlayerConfig
   var errorListener: () -> Unit = {}
   var useAutoPlay = false
   var wasPlaying: Boolean = false
-  var isHiddingImageAndPlayButton = false
+  var isHidingImageAndPlayButton = false
   var lastPosition: Long? = null
   var mediaSource: MediaSource? = null
 
@@ -134,9 +134,9 @@ class VideoWidgetView @JvmOverloads constructor(
   private fun onActivityPause() {
     if (isPlaying()) {
       wasPlaying = true
-//      pauseVideo()
+      pauseVideo()
 //      exoPlayer?.stop()
-      lastPosition = exoPlayer?.currentPosition
+//      lastPosition = exoPlayer?.currentPosition
     }
     releaseExoPlayer(exoPlayer)
   }
@@ -148,7 +148,10 @@ class VideoWidgetView @JvmOverloads constructor(
 //        mediaSource?.let { player.prepare(it) }
 //      }
 //    }
-    initialize()
+    doIfUnderTheHood(UnderTheHood.PLAYER_VIEW, {
+      showImage(true)
+    })
+    initializeVideo()
 
     lastPosition?.let { seekTo(it) }
     if (wasPlaying) { // TODO Melero 26/11/19 Aquí había un if de useAutoPlay
@@ -164,34 +167,27 @@ class VideoWidgetView @JvmOverloads constructor(
   }
 
   @JvmOverloads
-  fun drawVideo(
-    imageVideoWidget: ImageVideoWidgetBO,
-    playerConfig: PlayerConfig? = null,
-    isFromSpot: Boolean = false
-  ) {
+  fun drawVideo(imageVideoWidget: ImageVideoWidgetBO, playerConfig: PlayerConfig? = null,
+                isFromSpot: Boolean = false) {
 
     this.playerConfig = playerConfig ?: PlayerConfig.Builder().build()
 
     videoWidget = imageVideoWidget
     widgetPosition = imageVideoWidget.position
-    useDefaultPlayerController(this.playerConfig.usesDefaultPlayerControls)
     init()
 
     // Resize de views with the new measures
     val viewDimensions = calculateViewDimensions(imageVideoWidget)
-    resizeViews(viewDimensions, container, textureV, imageView)
+    resizeViews(viewDimensions, container, textureView, imageView)
 
-    setUpView(useAutoPlay)
-    imageVideoWidget.image?.let { setUpImage(it, isFromSpot ) }// TODO Melero 25/11/19 isFromSpot tiene que calcularse //   fuera de esta vista.
     observeLifeCycle()
-    initialize()
+    setUpView(this.playerConfig, useAutoPlay)
+    setUpImage(null, false)
+//    imageVideoWidget.image?.let { setUpImage(it, isFromSpot) }
+    initializeVideo()
   }
 
   @Suppress("MemberVisibilityCanBePrivate")
-  fun setCenterCrop() {
-//     setCenterCrop(playerView)
-  }
-
   fun pauseVideo() {
     exoPlayer?.playWhenReady = false
     lastPosition = exoPlayer?.currentPosition
@@ -205,6 +201,7 @@ class VideoWidgetView @JvmOverloads constructor(
     }
   }
 
+  @Suppress("MemberVisibilityCanBePrivate")
   fun playVideo() {
     if (exoPlayer?.playWhenReady != true) {
       exoPlayer?.playWhenReady = true
@@ -217,6 +214,7 @@ class VideoWidgetView @JvmOverloads constructor(
     }
   }
 
+  @Suppress("MemberVisibilityCanBePrivate")
   fun seekTo(milliseconds: Long) {
     exoPlayer?.seekTo(milliseconds)
   }
@@ -268,30 +266,37 @@ class VideoWidgetView @JvmOverloads constructor(
     isWifiConnection = isWifiConnected()
   }
 
-  private fun setUpView(useAutoPlay: Boolean) {
+  private fun releaseExoPlayer(player: SimpleExoPlayer?) {
+    if (player != null) {
+      player.stop()
+      player.release()
+      player.setVideoTextureView(null)
+      player.setVideoSurfaceView(null)
+      mediaSource = null
+      exoPlayer = null
+    }
+  }
+
+  private fun setUpView(playerConfig:PlayerConfig, useAutoPlay: Boolean) {
     if (isWifiConnection || useAutoPlay) {
-      changeVideoAlpha(0F)
+      hideUnusedPlayerView()
+      useDefaultPlayerController(playerConfig.usesDefaultPlayerController)
+      changePlayerAlpha(0F)
       showPlayer(true)
       showPlay(false)
-      AnimationUtils.animateViewSetWithAlpha(imageView, 0, textureV, 1, 400)
+      AnimationUtils.animateViewSetWithAlpha(imageView, 0, getUnderTheHood(), 1, 400)
       showImage(!useAutoPlay)
     }
   }
 
-  private fun setUpImage(image: ImageWBO, isFromSpot: Boolean) {
-    val imageUrl = if (isFromSpot) {
-      formatSpotImageUrl(image)
-    } else {
-      image.path
-    }
+  private fun setUpImage(image: ImageWBO?, isFromSpot: Boolean) {
+//    val imageUrl = if (isFromSpot) { formatSpotImageUrl(image) } else { image.path }
 //    imageView.loadImage(imageUrl, image.width.toFloat(), image.height.toFloat(), ImageLoader.CropType.Default())
   }
 
-  private fun setupVideo(video: VideoWBO, playerConfig: PlayerConfig, isFromSpot: Boolean) {
+  private fun setUpVideo(video: VideoWBO, playerConfig: PlayerConfig, isFromSpot: Boolean) {
     video.path?.let {
-      path = it
-      val videoConfig: VideoConfigBO =
-        videoWidget.video?.videoConfig ?: VideoConfigBO.Builder().build()
+      val videoConfig: VideoConfigBO = video.videoConfig ?: VideoConfigBO.Builder().build()
       loadVideo(it, playerConfig, videoConfig, isFromSpot)
     }
   }
@@ -303,12 +308,8 @@ class VideoWidgetView @JvmOverloads constructor(
       // If not matchScreen, the dimensions are calculated maintaining the image/video proportions
     } else {
       val screenWidth = ScreenUtils.width(context)
-      val baseWidth =
-        imageVideoWidget.image?.width ?: imageVideoWidget.video?.width ?: screenWidth.roundToInt()
-      val baseHeight =
-        imageVideoWidget.image?.height ?: imageVideoWidget.video?.height ?: ScreenUtils.heightProv(
-          context
-        ).roundToInt()
+      val baseWidth = imageVideoWidget.image?.width ?: imageVideoWidget.video?.width ?: screenWidth.roundToInt()
+      val baseHeight = imageVideoWidget.image?.height ?: imageVideoWidget.video?.height ?: ScreenUtils.heightProv(context).roundToInt()
       val imageFactor = screenWidth / baseWidth
 
       val width = screenWidth.roundToInt()
@@ -320,58 +321,60 @@ class VideoWidgetView @JvmOverloads constructor(
     views.forEach { it.redimension(dimensions.width, dimensions.height) }
   }
 
-  private fun loadVideo(
-    url: String,
-    playerConfig: PlayerConfig,
-    videoConfig: VideoConfigBO,
-    isFromSpot: Boolean
-  ) {
+  private fun loadVideo(url: String, playerConfig: PlayerConfig, videoConfig: VideoConfigBO,
+                        isFromSpot: Boolean) {
     if (url.isNotEmpty()) {
       exoPlayer = createPlayer(context).apply {
-        val finalUrl = if (isFromSpot) {
-          formatSpotVideoPath(url)
-        } else {
-          url
-        }
+        val finalUrl = formatUrl(isFromSpot, url)
+        val mediaSource = getMediaSource(playerConfig.usesCache, finalUrl)
 
         setUpExoPlayer(this, playerConfig, videoConfig)
-//        setUpVideoPlayer(this, textureV, videoConfig)
-        mediaSource = playVideoWithCache(context, this, finalUrl)
-        textureListener(this)
-        setVideoTextureView(textureV)
+        joinVideoAndPlayer(this)
+        prepare(mediaSource)
+        showPlay(true)
       }
-      showPlay(true)
     }
   }
 
-  private fun setUpExoPlayer(
-    exoPlayer: SimpleExoPlayer,
-    playerConfig: PlayerConfig,
-    videoConfig: VideoConfigBO
-  ) {
+  private fun formatUrl(isFromSpot: Boolean, url: String) =
+    if (isFromSpot) { formatSpotVideoPath(url) } else { url }
+
+  private fun setUpExoPlayer(exoPlayer: SimpleExoPlayer, playerConfig: PlayerConfig,
+                             videoConfig: VideoConfigBO) {
     useAutoPlay = videoConfig.autoPlay
     exoPlayer.playWhenReady = videoConfig.autoPlay
-    exoPlayer.repeatMode = if (videoConfig.loop) {
-      Player.REPEAT_MODE_ONE
-    } else {
-      Player.REPEAT_MODE_OFF
-    }
+    exoPlayer.repeatMode = Player.REPEAT_MODE_ONE.takeIf { videoConfig.loop } ?: Player.REPEAT_MODE_OFF
     exoPlayer.addListener(ExoPlayerEventListener(playerConfig, videoConfig))
+    if (playerConfig.centerCrop) {
+      setCenterCrop()
+    }
   }
 
-//  private fun setUpVideoPlayer(exoPlayer: SimpleExoPlayer, playerView: PlayerView, config: VideoConfigBO) {
-//    playerView.player = exoPlayer
-//    if (config.centerCrop) {
-//      setCenterCrop(playerView)
-//    }
-//  }
-
-  private fun setCenterCrop(playerView: PlayerView) {
-//    playerView.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+  private fun joinVideoAndPlayer(exoPlayer: SimpleExoPlayer) {
+    doIfUnderTheHood(UnderTheHood.TEXTURE_VIEW,
+      { exoPlayer.setVideoTextureView(it as TextureView) },
+      { (it as PlayerView).player = exoPlayer })
   }
 
-  private fun initialize() {
-    videoWidget.video?.let { setupVideo(it, playerConfig, false) }
+  private fun getMediaSource(useCache: Boolean, videoUrl: String) : MediaSource? =
+    if (useCache) {
+      getCachedMediaSource(context, videoUrl)
+    } else {
+      getMediaSource(context, videoUrl)
+    }
+
+  private fun setCenterCrop() {
+    doIfUnderTheHood(UnderTheHood.PLAYER_VIEW,
+      { (it as PlayerView).resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM },
+      { setTextureViewCenterCrop(it as TextureView) })
+  }
+
+  private fun setTextureViewCenterCrop(textureView: TextureView) {
+    // // TODO Juan Jose Melero 28/11/2019 No implementation!!!
+  }
+
+  private fun initializeVideo() {
+    videoWidget.video?.let { setUpVideo(it, playerConfig, false) }
   }
 
   private fun formatSpotImageUrl(image: ImageWBO): String {
@@ -417,39 +420,63 @@ class VideoWidgetView @JvmOverloads constructor(
   }
 
   private fun showPlayer(show: Boolean) {
-//    playerView.setVisible(show)
-    textureV.setVisible(show)
+    getUnderTheHood().setVisible(show)
   }
 
   private fun showImage(show: Boolean) {
-    imageView.setVisible(playerConfig.hasImage && show)
+    val willShow = playerConfig.hasImage && show
+    imageView.setVisible(willShow)
+    if (willShow) { imageView.alpha = 1F }
   }
 
   private fun hideImageAndPlayButtonWithAnimation() {
     val animationOut = AnimationUtils.fadeOut(500)
     animationOut.setAnimationListener(object : AnimationUtils.AnimationEndListener() {
       override fun onAnimationEnd(animation: Animation) {
-        isHiddingImageAndPlayButton = false
+        isHidingImageAndPlayButton = false
         showImage(!isPlaying())
         showPlay(!isPlaying())
       }
     })
     imageView.startAnimation(animationOut)
-    isHiddingImageAndPlayButton = true
+    isHidingImageAndPlayButton = true
   }
 
   private fun isWifiConnected(): Boolean {
     return ConnectivityManager.isWifiConnected(context)
   }
 
-  private fun ExoPlayer.isPlaying() = isReady() && playWhenReady
-
-  private fun ExoPlayer.isReady() = playbackState == Player.STATE_READY
-
   private fun observeLifeCycle() {
     val lifeCycle = (context as? AppCompatActivity)?.lifecycle
     lifeCycle?.removeObserver(this)
     lifeCycle?.addObserver(this)
+  }
+
+  private fun getUnderTheHood() =
+    textureView.takeIf { playerConfig.underTheHood == UnderTheHood.TEXTURE_VIEW } ?: playerView
+
+  private fun doIfUnderTheHood(expectedUnderTheHood: UnderTheHood, what: (view: View) -> Unit,
+                               inAnyOtherCase:(otherView: View) -> Unit = {}) {
+    val underTheHoodView = getUnderTheHood()
+    if (playerConfig.underTheHood == expectedUnderTheHood) {
+      what(underTheHoodView)
+    } else {
+      inAnyOtherCase(underTheHoodView)
+    }
+  }
+
+  private fun useDefaultPlayerController(use: Boolean) {
+    doIfUnderTheHood(UnderTheHood.PLAYER_VIEW, { (it as PlayerView).useController = use })
+  }
+
+  private fun hideUnusedPlayerView() {
+    doIfUnderTheHood(UnderTheHood.PLAYER_VIEW,
+      { textureView.setVisible(false) },
+      { playerView.setVisible(false) })
+  }
+
+  private fun changePlayerAlpha(alpha: Float) {
+    getUnderTheHood().alpha = alpha
   }
 
   /*endregion*/
@@ -458,19 +485,17 @@ class VideoWidgetView @JvmOverloads constructor(
 
   @OnClick(R.id.video__img__image_widget)
   fun onImageClick() {
-    if (isHiddingImageAndPlayButton) {
+    if (isHidingImageAndPlayButton) {
       onVideoClick()
 
-    } else if (playerConfig.playOnImageClick) {
+    } else if (playerConfig.playsOnImageClick) {
       useAutoPlay = true  // TODO Melero 26/11/19 Debería renombrarse
 //      if (widgetPosition != NO_HORIZONTAL_SLIDER) {
 //        viewModel.forceAutoPlay()
 //      }
 
       playVideo()
-      changeVideoAlpha(1F)
       showPlayer(true)
-      hideImageAndPlayButtonWithAnimation()
     }
   }
 
@@ -490,6 +515,29 @@ class VideoWidgetView @JvmOverloads constructor(
 
   /*endregion*/
 
+  //region Extensions
+
+  private fun ExoPlayer.isPlaying() = isReady() && playWhenReady
+
+  private fun ExoPlayer.isReady() = playbackState == Player.STATE_READY
+
+  fun View.redimension(width: Int, height: Int) {
+    layoutParams.width = width
+    layoutParams.height = height
+  }
+
+  @JvmOverloads
+  fun View?.setVisible(condition: Boolean, doWhenVisible: () -> Unit = {}) {
+    this?.visibility = if (condition) {
+      doWhenVisible()
+      View.VISIBLE
+    } else {
+      View.GONE
+    }
+  }
+
+  // endregion
+
   /*region Inner Classes*/
 
   private inner class ExoPlayerEventListener(
@@ -502,6 +550,9 @@ class VideoWidgetView @JvmOverloads constructor(
         Player.STATE_BUFFERING -> {
           if (useAutoPlay || isWifiConnection) {
             showPlayer(true)
+            if (playerConfig.hasImage) {
+              hideImageAndPlayButtonWithAnimation()
+            }
           }
         }
         Player.STATE_READY -> {
@@ -516,6 +567,7 @@ class VideoWidgetView @JvmOverloads constructor(
 //            seekTo(0)
 //            pauseVideo()
 //          }
+
           lastPosition = exoPlayer?.currentPosition
 
           if (playerConfig.showPlayOnVideoEnd) {
@@ -539,13 +591,16 @@ class VideoWidgetView @JvmOverloads constructor(
   class PlayerConfig private constructor() {
 
     var hasImage = true
-    var playOnImageClick = true
+    var usesCache = false
+    var centerCrop = false
     var hasPlayImage = true
+    var underTheHood: UnderTheHood = UnderTheHood.TEXTURE_VIEW
+    var playsOnImageClick = true
     var showPlayOnVideoEnd = false
     var showImageOnVideoEnd = false
     var showImageOnVideoPaused = false
     var showPlayOnVideoPaused = true
-    var usesDefaultPlayerControls = false
+    var usesDefaultPlayerController = false
 
     class Builder {
 
@@ -555,8 +610,8 @@ class VideoWidgetView @JvmOverloads constructor(
         config.hasImage = hasImage
       }
 
-      fun playOnImageClick(playOnImageClick: Boolean) = apply {
-        config.playOnImageClick = playOnImageClick
+      fun playsOnImageClick(playsOnImageClick: Boolean) = apply {
+        config.playsOnImageClick = playsOnImageClick
       }
 
       fun hasPlayImage(hasPlayImage: Boolean) = apply {
@@ -580,7 +635,19 @@ class VideoWidgetView @JvmOverloads constructor(
       }
 
       fun usesDefaultPlayerControls(usesDefaultPlayerControls: Boolean) = apply {
-        config.usesDefaultPlayerControls = usesDefaultPlayerControls
+        config.usesDefaultPlayerController = usesDefaultPlayerControls
+      }
+
+      fun underTheHood(underTheHood: UnderTheHood) = apply {
+        config.underTheHood = underTheHood
+      }
+
+      fun usesCache(usesCache: Boolean) = apply {
+        config.usesCache = usesCache
+      }
+
+      fun centerCrop(centerCrop: Boolean) = apply {
+        config.centerCrop = centerCrop
       }
 
       fun build() = config
@@ -589,65 +656,10 @@ class VideoWidgetView @JvmOverloads constructor(
 
   inner class Dimensions(val width: Int, val height: Int)
 
+  enum class UnderTheHood(private val id: Int) {
+    TEXTURE_VIEW(0), PLAYER_VIEW(1)
+  }
+
 
   /*endregion*/
-
-  fun View.redimension(width: Int, height: Int) {
-    layoutParams.width = width
-    layoutParams.height = height
-  }
-
-  @JvmOverloads
-  fun View?.setVisible(condition: Boolean, doWhenVisible: () -> Unit = {}) {
-    this?.visibility = if (condition) {
-      doWhenVisible()
-      View.VISIBLE
-    } else {
-      View.GONE
-    }
-  }
-
-  private fun useDefaultPlayerController(use: Boolean) {
-//    playerView.useController = use
-  }
-
-  private fun changeVideoAlpha(alpha: Float) {
-//    playerView.alpha = alpha
-    textureV.alpha = alpha
-  }
-
-  private fun textureListener(exoPlayer: SimpleExoPlayer) {
-    textureV.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
-      override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture?, width: Int, height: Int) {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-      }
-
-      override fun onSurfaceTextureUpdated(surface: SurfaceTexture?) {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-      }
-
-      override fun onSurfaceTextureDestroyed(surface: SurfaceTexture?): Boolean {
-        releaseExoPlayer(exoPlayer)
-        return false
-      }
-
-      override fun onSurfaceTextureAvailable(surfaceTexture: SurfaceTexture, i: Int, i1: Int) {
-//      if (exoPlayer != null) {
-//        OkHttpDataSourceFactory okHttpDataSourceFactory = new OkHttpDataSourceFactory(
-//          getOkHttpClient(),
-//          Util.getUserAgent(mVideoTextureView.getContext(), null),
-//          null
-//        );
-//
-//        playerMediaSource = new ExtractorMediaSource(Uri.parse(url),
-//        okHttpDataSourceFactory, new DefaultExtractorsFactory(), null,
-//        null);
-//
-//        player.setVideoTextureView(mVideoTextureView);
-//        player.addListener(
-//          new ComponentListener(mVideoTextureView, image));
-        mediaSource?.let { exoPlayer.prepare(it) }
-      }
-    }
-  }
 }

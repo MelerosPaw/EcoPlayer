@@ -6,6 +6,7 @@ import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.ExoPlayerFactory
 import com.google.android.exoplayer2.SimpleExoPlayer
 import com.google.android.exoplayer2.ext.okhttp.OkHttpDataSourceFactory
+import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory
 import com.google.android.exoplayer2.offline.DownloadManager
 import com.google.android.exoplayer2.offline.DownloadService
 import com.google.android.exoplayer2.offline.DownloaderConstructorHelper
@@ -25,30 +26,35 @@ import com.google.android.exoplayer2.util.Util
 import okhttp3.OkHttpClient
 import java.io.File
 
-fun playVideoWithCache(context: Context, player: ExoPlayer, videoUrl: String): MediaSource? {
+fun getCachedMediaSource(context: Context, videoUrl: String): MediaSource? {
 
     // Data source
-    val okHttpDataSourceFactory = OkHttpDataSourceFactory(getOkHttpClient(context),
+    val okHttpDataSourceFactory = OkHttpDataSourceFactory(getOkHttpClient(),
         Util.getUserAgent(context, null), null
     )
 
     // Offline cache
     val parsedUrl = Uri.parse(videoUrl)
     val progressiveDownloadAction = ProgressiveDownloadAction(parsedUrl, false, null, null)
-    DownloadService.startWithAction(context,
-        ExoPlayerDownloadService::class.java,
-        progressiveDownloadAction,
-        true)
+
+    DownloadService.startWithAction(context, ExoPlayerDownloadService::class.java,
+        progressiveDownloadAction,true)
 
     // Playback
     val cacheDataSourceFactory = CacheDataSourceFactory(getDownloadCache(context), okHttpDataSourceFactory)
-
-    playerMediaSource = ExtractorMediaSource.Factory(cacheDataSourceFactory).createMediaSource(parsedUrl)
-    player.prepare(playerMediaSource)
-    return playerMediaSource
+    return ExtractorMediaSource.Factory(cacheDataSourceFactory).createMediaSource(parsedUrl)
 }
 
-private fun getOkHttpClient(context: Context): OkHttpClient {
+fun getMediaSource(context: Context, videoUrl: String): MediaSource {
+    val okHttpDataSourceFactory = OkHttpDataSourceFactory(getOkHttpClient(),
+          Util.getUserAgent(context, null), null)
+
+    return ExtractorMediaSource(Uri.parse(videoUrl), okHttpDataSourceFactory,
+        DefaultExtractorsFactory(), null, null)
+//        player.addListener(new ComponentListener(mVideoTextureView, image));
+}
+
+private fun getOkHttpClient(): OkHttpClient {
     return ApiModule.getUnsafeOkHttpClient(null).build()
 
 }

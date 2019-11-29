@@ -17,7 +17,6 @@ class MainActivity : AppCompatActivity() {
         val videoConfig = VideoConfigBO.Builder()
             .autoPlay(false)
             .loop(false)
-            .centerCrop(true)
             .build()
         val video = VideoWBO(url, videoConfig, ScreenUtils.width(this).toInt(),
             ScreenUtils.heightProv(this).toInt())
@@ -25,13 +24,16 @@ class MainActivity : AppCompatActivity() {
         imageVideo.position = 0
 
         val viewConfig = VideoWidgetView.PlayerConfig.Builder()
-            .hasImage(false)
+            .hasImage(true)
+            .usesCache(true)
+            .centerCrop(true)
             .hasPlayImage(true)
-            .playOnImageClick(false)
+            .playsOnImageClick(true)
             .showPlayOnVideoEnd(true)
-            .showImageOnVideoEnd(false)
+            .showImageOnVideoEnd(true)
             .showPlayOnVideoPaused(true)
             .showImageOnVideoPaused(false)
+            .underTheHood(VideoWidgetView.UnderTheHood.TEXTURE_VIEW)
             .build()
         player.drawVideo(imageVideo, viewConfig)
     }
